@@ -1,0 +1,20 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["verdict", "summary", "checks"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["pass", "block", "needs_review"]},
+    "summary": {"type": "string"},
+    "checks": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "status", "reason"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["selection", "dosage", "forbidden", "duplication", "contraindication"]},
+          "status": {"type": "string", "enum": ["pass", "fail", "unknown"]},
+          "reason": {"type": "string"}
+        }
+      }
+    }
+  }
+}

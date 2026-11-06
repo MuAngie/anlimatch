@@ -1,0 +1,14 @@
+{
+  "type":"object", "additionalProperties":false,
+  "required":["status","summary","goals","cautions","missing"],
+  "properties":{
+    "status":{"type":"string","enum":["ready","needs_review","block"]},
+    "summary":{"type":"string"},
+    "goals":{"type":"array","items":{"type":"object","additionalProperties":false,
+      "required":["name","evidence","catalog_goal","kind"], "properties":{
+        "kind":{"type":"string","enum":["supplement_need","health_management"]},
+        "name":{"type":"string"},"evidence":{"type":"string"},"catalog_goal":{"type":"string"}}}},
+    "cautions":{"type":"array","items":{"type":"string"}},
+    "missing":{"type":"array","items":{"type":"string"}}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["status", "summary", "products"],
+  "properties": {
+    "status": {"type": "string", "enum": ["proposed", "needs_review", "block"]},
+    "summary": {"type": "string"},
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["catalog_id", "rationale"],
+        "properties": {
+          "catalog_id": {"type": "string"},
+          "rationale": {"type": "string"}
+        }
+      }
+    }
+  }
+}

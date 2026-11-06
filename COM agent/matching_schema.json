@@ -1,0 +1,18 @@
+{
+  "type":"object","additionalProperties":false,"required":["summary","products"],
+  "properties":{
+    "summary":{"type":"string"},
+    "products":{"type":"array","maxItems":10,"items":{
+      "type":"object","additionalProperties":false,
+      "required":["catalog_id","status","goal_indices","reason","evidence"],
+      "properties":{
+        "catalog_id":{"type":"string"},
+        "status":{"type":"string","enum":["related","uncertain"]},
+        "goal_indices":{"type":"array","items":{"type":"integer"}},
+        "reason":{"type":"string"},
+        "evidence":{"type":"array","items":{"type":"object","additionalProperties":false,
+          "required":["field","quote"],"properties":{"field":{"type":"string"},"quote":{"type":"string"}}}}
+      }
+    }}
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "rules"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "title",
+          "conditions",
+          "product_ids",
+          "reason",
+          "limitations",
+          "source_evidence"
+        ],
+        "properties": {
+          "source_evidence": {
+            "type": "object", "additionalProperties": false,
+            "required": ["field", "quote"],
+            "properties": {"field": {"type": "string"}, "quote": {"type": "string"}}
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "select",
+              "combine",
+              "exclude"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "goals",
+              "conditions",
+              "medications",
+              "allergies",
+              "pregnancy",
+              "age_min",
+              "age_max"
+            ],
+            "properties": {
+              "goals": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "medications": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allergies": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pregnancy": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "age_min": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "age_max": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            }
+          },
+          "product_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

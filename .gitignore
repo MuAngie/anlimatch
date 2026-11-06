@@ -1,0 +1,42 @@
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+**/auth.json
+**/credentials.json
+**/secrets.json
+*.pem
+*.key
+.codex/
+.agents/
+
+# Health records, administrator accounts, histories and local exports
+**/data/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.bak
+deliverables/
+
+# Runtime dependencies, caches and temporary tests
+.video-runtime/
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.admin-test-*/
+.learning-test-*/
+*.log
+*.out.txt
+*.err.txt
+
+# Development screenshots and older flowchart exports
+/COM agent/*.png
+/COM agent/preview.jpg
+/archive/liuchengV*/
+.DS_Store
+Thumbs.db
