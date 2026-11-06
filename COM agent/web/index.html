@@ -6,10 +6,10 @@
 <main>
 <header class="topbar"><span>健康管理 / <b id="crumb">组合工作台</b></span><span class="engine-label"><a href="/admin" target="_blank" rel="noopener">管理后台</a> 本地运行 <span class="dot"></span></span></header>
 <div class="save-bar"><span id="save-status" role="status" aria-live="polite">正在载入资料…</span><button id="retry-save" type="button" class="text-button" hidden>重试保存</button><button id="download-draft" type="button" class="text-button" hidden>下载未保存草稿</button><button id="reload-user" type="button" class="text-button" hidden>载入已保存资料，放弃本页修改</button></div>
-<div id="task-panel" class="task-bar" hidden><div><strong id="task-stage" role="status" aria-live="polite"></strong><span id="task-time"></span><p id="task-message"></p></div><div><button id="cancel-task" class="secondary" type="button">取消任务</button><button id="retry-task" class="primary" type="button" hidden>重试当前步骤</button><button id="refresh-task" class="text-button" type="button" hidden>重新连接任务</button></div></div>
 <section id="workspace" class="view">
 <div class="page-heading"><div><h1>健康产品组合</h1><p>输入体检分析，选择产品库，生成每日用量和报价。</p></div><button id="load-demo" class="secondary">载入示例</button></div>
 <ol class="steps" aria-label="报告生成步骤"><li><button id="step-analysis" type="button" class="text-button" aria-current="step"><span>01</span> 分析资料</button></li><li><button id="step-needs" type="button" class="text-button" disabled><span>02</span> 需求确认与选品</button></li><li><button id="step-selection" type="button" class="text-button" disabled><span>03</span> 选品结果</button></li><li><button id="step-report" type="button" class="text-button" disabled><span>04</span> 组合报告</button></li></ol>
+<div id="task-panel" class="task-bar" hidden><div><strong id="task-stage" role="status" aria-live="polite"></strong><span id="task-time"></span><p id="task-message"></p></div><div><button id="cancel-task" class="secondary" type="button">取消任务</button><button id="retry-task" class="primary" type="button" hidden>重试当前步骤</button><button id="refresh-task" class="text-button" type="button" hidden>重新连接任务</button></div></div>
 <div class="workspace-flow">
 <form id="case-form" class="input-panel" novalidate><section id="analysis-step">
 <div class="section-heading"><h2>分析资料</h2><label class="file-link">导入文字<input id="text-file" type="file" accept=".txt,.md" hidden></label></div>
