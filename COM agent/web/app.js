@@ -359,6 +359,21 @@ function matchingHTML(matching) {
   const candidates = [...related,...uncertain];
   return `<details class="report-section"><summary>产品关联判断 · ${related.length}款有关联 · ${uncertain.length}款待核验</summary><p>${escapeHTML(matching.summary)}</p><p class="field-help">${escapeHTML(matching.source)} · ${escapeHTML(matching.model)} · ${matching.confirmed ? '使用已确认的选品结果' : matching.rule_based ? '复用人工审核规则，未调用选品模型' : matching.cached ? '复用相同资料的关联结果' : '一次批量关联调用'} · 最多召回10款候选</p>${candidates.map(p=>`<details><summary>${escapeHTML(p.name)} · ${p.status==='uncertain' ? '关联待确认' : p.conflicts.length ? '存在冲突' : p.missing.length ? '资料待核验' : '有关联'}</summary><p>${escapeHTML(p.reason)}</p>${p.evidence.map(e=>`<p class="field-help">依据：${escapeHTML(e.quote)}</p>`).join('')}${p.missing.length ? `<p class="field-help">缺少：${escapeHTML(p.missing.join('、'))}</p>` : ''}${p.conflicts.map(c=>`<p class="field-help">${escapeHTML(c)}</p>`).join('')}</details>`).join('')}<p class="field-help">${matching.products.length-candidates.length}款未召回，未召回不等于不适用；${matching.excluded_products.length}款禁用、停用或按审核规则排除。有关联不等于已通过个体复核。</p></details>`;
 }
+function cleanReportText(value) {
+  return String(value || '').replace(/\r\n?/g,'\n').replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,'\n\n').replace(/^\n+|\n+$/g,'');
+}
+function productUsage(product) {
+  for (const fields of [product, product.raw || {}]) {
+    for (const key of ['usage_method','使用方式','使用方法','食用方法','建议食用方法']) {
+      if (typeof fields[key] === 'string' && fields[key].trim()) return fields[key].trim();
+    }
+  }
+  return '未提供，请核对现售标签后确认';
+}
+function reportMainProblems(r) {
+  if (r.analysis.original_summary || ('input_text' in r && r.analysis.summary !== r.input_text)) return r.analysis.summary;
+  return r.analysis.goal_context?.summary || (r.analysis.goals.length ? '本次已确认的需求：'+r.analysis.goals.join('、') : '未识别明确需求，请核对原专业分析。');
+}
 function renderReport() {
   workspaceStep('report');
   closeReportEditor(); $('edit-report').hidden = true;
@@ -370,29 +385,32 @@ function renderReport() {
     $('report-body').innerHTML = matchingHTML(state.result.matching) + evaluationHTML(ev) + `<p class="field-help">${ev.verdict==='error' ? '模型调用未完成，可在页面上方重试未完成步骤。' : '未输出组合、用量和报价。补充资料或调整要求后重新生成。'}</p>`;
     return;
   }
-  const r = state.result.report; $('report-placeholder').hidden = true; $('report-body').hidden = false; $('report-actions').hidden = false;
-  $('edit-report').hidden = false;
+  const r = state.result.report, p = r.pricing;
+  $('report-placeholder').hidden = true; $('report-body').hidden = false; $('report-actions').hidden = false; $('edit-report').hidden = false;
   $('report-state').textContent = ev.verdict === 'needs_review' || r.warnings?.length ? '草案 · 有提醒' : '待专业复核'; $('report-state').className = 'badge';
-  const section = (title, html) => `<div class="report-section"><h3>${title}</h3>${html}</div>`;
-  const list = items => `<ul>${items.map(x => `<li>${escapeHTML(x)}</li>`).join('')}</ul>`;
-  const productLines = r.selected_products.map(p => `<div class="product-line"><div class="product-letter">${escapeHTML(p.sku.replace('DEMO-','').slice(0,2))}</div><div><div class="product-name">${escapeHTML(p.name)}</div><div class="product-meta">${escapeHTML(p.matched_goals.join('、'))} · ${r.days}天共需${p.quote.packs}包装</div></div><div class="product-dose">${fmt(p.daily_units)} ${escapeHTML(p.unit)}<small>每日 · ${p.professional_adjustment ? '个体调整量（待核实）' : '标签默认量'}</small></div></div>`).join('');
-  const p = r.pricing;
-  let html = matchingHTML(state.result.matching || r.matching) + (ev ? evaluationHTML(ev) : '') + `<div class="report-user"><strong>${escapeHTML(r.profile.name || r.profile.id)}</strong><span>用户编号：${escapeHTML(r.profile.id)}</span></div><div class="notice"><strong>${r.demo ? '示例报告，不用于实际配比' : '报告待专业复核'}</strong>${r.status === 'blocked' ? escapeHTML(r.blocked.join('；')) : '需核对用户禁忌、药物相互作用和实际饮食摄入。'}</div>`;
+  const section = (title,html) => `<section class="report-section"><h3>${title}</h3>${html}</section>`;
+  const list = items => `<ul>${items.map(x=>`<li>${escapeHTML(x)}</li>`).join('')}</ul>`;
+  const original = r.input_text ?? r.analysis.original_summary ?? r.analysis.summary;
+  let html = `<div class="report-user"><strong>${escapeHTML(r.profile.name || r.profile.id)}</strong><span>用户编号：${escapeHTML(r.profile.id)}</span></div><div class="notice"><strong>${r.demo ? '示例报告，不用于实际配比' : '报告待专业复核'}</strong>报告日期 ${escapeHTML(r.as_of || '')} · ${r.days}天；需核对禁忌、药物相互作用及实际摄入。</div>`;
   if (r.edited_at) html += `<p class="field-help">报告文字已人工修改并重新复核 · ${escapeHTML(r.edited_at)}</p>`;
-  if (r.warnings?.length) html += section('组合提醒（待确认）', `<p class="field-help">以下事项尚未确认，产品用量与报价按现有资料计算。</p>${list(r.warnings)}`);
-  if (r.learning?.rules.length) html += section('命中的人工审核规则', `<details><summary>${r.learning.rules.length}条规则 · 可由管理员按来源案例追溯</summary>${r.learning.rules.map(rule=>`<p><strong>${escapeHTML(rule.title)}</strong> · 版本 ${rule.revision}<br>依据：${escapeHTML(rule.reason)}<br>局限：${escapeHTML(rule.limitations)}<br><span class="field-help">规则 ${escapeHTML(rule.id)} · 来源案例 ${escapeHTML(rule.case_title)}（${escapeHTML(rule.case_id)}）</span></p>`).join('')}</details>`);
-  html += section('01 · 体检分析与营养目标', `<div class="analysis-excerpt">${escapeHTML(r.analysis.summary)}</div>${r.analysis.original_summary ? `<details><summary>查看原专业分析</summary><div class="analysis-excerpt">${escapeHTML(r.analysis.original_summary)}</div></details>` : ''}<div class="goal-chips">${r.analysis.goals.map(g => `<span class="chip">${escapeHTML(g)}</span>`).join('') || '<span class="field-help">未识别营养目标</span>'}</div>`);
-  if (r.analysis.goal_context) html += section('需求确认依据', list(r.analysis.goal_context.goals.map(g=>`${g.name}：${g.evidence}`).concat(r.analysis.goal_context.cautions)));
-  html += section('02 · 产品组合与每日用量', productLines || '<p>暂无符合条件的产品。请查看资料缺项和排除原因。</p>');
-  if (r.selected_products.length) {
-    html += section('03 · 搭配依据', r.selected_products.map(x => `<details><summary>${escapeHTML(x.name)}</summary><p>${escapeHTML(x.rationale)}</p><p class="field-help">标签：${escapeHTML(x.label_source)}</p>${list(x.evidence)}<p class="field-help">一般成分证据不代表品牌疗效；本组合未提供直接协同研究。</p></details>`).join(''));
-    html += section('04 · 每日成分贡献', `<div class="table-scroll"><table><thead><tr><th>成分</th><th>本组合</th><th>总摄入</th><th>上限检查</th></tr></thead><tbody>${r.nutrients.map(n => `<tr><td>${escapeHTML(n.name)}</td><td>${fmt(n.product_amount)} ${escapeHTML(n.unit)}</td><td>${fmt(n.total)} ${escapeHTML(n.unit)}</td><td>${escapeHTML(n.result)}</td></tr>`).join('')}</tbody></table></div><p class="field-help">总摄入包含饮食与其他补充剂，缺失时不会假设为0。</p>`);
-    html += section('05 · 周期报价', `<div class="quote-total"><span>${r.days}天 · 整包装购买总额</span><strong>${price(p.total)}</strong></div><div class="quote-detail"><span>已知商品小计</span><span>${price(p.known_subtotal)}</span></div><div class="quote-detail"><span>运费 / 整单优惠</span><span>${price(p.shipping)} / ${price(p.discount)}</span></div>${r.selected_products.map(x => `<div class="quote-detail"><span>${escapeHTML(x.name)} × ${x.quote.packs}</span><span>${price(x.quote.purchase_cost)}</span></div><p class="field-help">消耗成本 ${price(x.quote.consumption_cost)}；余量 ${fmt(x.quote.remaining_units)}${escapeHTML(x.unit)}；价格 ${escapeHTML(x.quote.price_date)} 有效至 ${escapeHTML(x.quote.valid_until)}。${escapeHTML(x.quote.price_reason || '')}</p>`).join('')}${p.budget_remaining != null ? `<div class="quote-detail"><span>${p.budget_remaining >= 0 ? '预算余量' : '超出预算'}</span><span>${price(Math.abs(p.budget_remaining))}</span></div>` : ''}`);
-  }
-  html += section('筛选记录', `<details ${r.selected_products.length ? '' : 'open'}><summary>${r.candidates.length}款候选 · ${r.excluded_products.length}条排除记录</summary>${list(r.excluded_products.map(x => `${x.name}：${x.reason}`))}</details>`);
-  html += section('待确认事项与复查建议', list([...r.blocked, ...r.missing, ...r.analysis.lifestyle, ...r.analysis.follow_up]));
+  let issues = `<div class="analysis-excerpt">${escapeHTML(cleanReportText(reportMainProblems(r)))}</div><div class="goal-chips">${r.analysis.goals.map(g=>`<span class="chip">${escapeHTML(g)}</span>`).join('')}</div>`;
+  if (r.warnings?.length) issues += `<div class="notice"><strong>组合提醒（待确认）</strong>${list(r.warnings)}</div>`;
+  if (r.analysis.lifestyle.length || r.analysis.follow_up.length) issues += `<h4>建议与复查</h4>${list([...r.analysis.lifestyle,...r.analysis.follow_up])}`;
+  html += section('1 本次有什么主要问题',issues);
+  html += section('2 选取了什么产品，为什么选取这些产品',r.selected_products.map(x=>`<article class="report-product"><h4>${escapeHTML(x.name)}</h4><p class="field-help">对应需求：${escapeHTML(x.matched_goals.join('、'))}</p><p class="analysis-excerpt">${escapeHTML(x.rationale)}</p></article>`).join('') || '<p>暂无符合条件的产品，请查看附录中的资料缺项。</p>');
+  const doses = `<div class="table-scroll"><table class="report-dose-table"><thead><tr><th>产品 / SKU</th><th>每日用量</th><th>使用方式</th><th>包装数</th><th>购买金额</th><th>消耗成本</th></tr></thead><tbody>${r.selected_products.map(x=>`<tr><td>${escapeHTML(x.name)}<small>${escapeHTML(x.sku)}</small></td><td>${fmt(x.daily_units)}${escapeHTML(x.unit)}<small>${x.professional_adjustment ? '个体调整量（待核实）' : '标签默认量'}</small></td><td>${escapeHTML(productUsage(x))}</td><td>${x.quote.packs}</td><td>${price(x.quote.purchase_cost)}</td><td>${price(x.quote.consumption_cost)}</td></tr>`).join('')}</tbody></table></div>`;
+  html += section('3 产品的剂量、使用方式及价格总和',doses+`<div class="quote-total"><span>${r.days}天 · 整包装购买总额</span><strong>${price(p.total)}</strong></div><div class="quote-detail"><span>已知商品小计</span><span>${price(p.known_subtotal)}</span></div><div class="quote-detail"><span>运费 / 整单优惠</span><span>${price(p.shipping)} / ${price(p.discount)}</span></div>${p.budget_remaining != null ? `<div class="quote-detail"><span>${p.budget_remaining >= 0 ? '预算余量' : '超出预算'}</span><span>${price(Math.abs(p.budget_remaining))}</span></div>` : ''}<p class="field-help">按整包装购买；未知价格不按0元计算。使用方式缺失时，需核对现售标签后确认。</p>`);
+  let appendix = `<details><summary>4.1 输入信息原文</summary><p class="field-help">仅整理多余空行，保留原文内容。</p><div class="analysis-excerpt">${escapeHTML(cleanReportText(original))}</div></details>`;
+  appendix += `<details><summary>4.2 推荐产品的原始信息</summary>${!('product_sources' in r) ? '<p class="field-help">历史报告未保存独立原始快照，以下为报告内保留资料。</p>' : ''}${(r.product_sources || r.selected_products).map(x=>`<details><summary>${escapeHTML(x.name)}</summary><pre class="report-source-json">${escapeHTML(JSON.stringify(x,null,2))}</pre></details>`).join('')}</details>`;
+  appendix += `<details><summary>每日成分合计</summary><div class="table-scroll"><table><thead><tr><th>成分</th><th>本组合</th><th>总摄入</th><th>上限检查</th></tr></thead><tbody>${r.nutrients.map(n=>`<tr><td>${escapeHTML(n.name)}</td><td>${fmt(n.product_amount)}${escapeHTML(n.unit)}</td><td>${fmt(n.total)}${escapeHTML(n.unit)}</td><td>${escapeHTML(n.result)}</td></tr>`).join('')}</tbody></table></div><p class="field-help">饮食或其他补充剂摄入未知时，不假设为0。</p></details>`;
+  if (r.analysis.goal_context) appendix += `<details><summary>需求提取与确认依据</summary>${list(r.analysis.goal_context.goals.map(g=>`${g.name}：${g.evidence}`).concat(r.analysis.goal_context.cautions))}</details>`;
+  appendix += matchingHTML(state.result.matching || r.matching) + evaluationHTML(ev);
+  if (r.learning?.rules.length) appendix += `<details><summary>命中的人工审核规则</summary>${r.learning.rules.map(rule=>`<p><strong>${escapeHTML(rule.title)}</strong> · 版本 ${rule.revision}<br>依据：${escapeHTML(rule.reason)}<br>局限：${escapeHTML(rule.limitations)}<br>规则 ${escapeHTML(rule.id)} · 来源案例 ${escapeHTML(rule.case_title)}（${escapeHTML(rule.case_id)}）</p>`).join('')}</details>`;
+  appendix += `<details><summary>筛选记录 · ${r.candidates.length}款候选 · ${r.excluded_products.length}条排除记录</summary>${list(r.excluded_products.map(x=>`${x.name}：${x.reason}`))}</details><details><summary>待确认事项与价格来源</summary>${list([...r.blocked,...r.missing])}${r.selected_products.map(x=>`<p class="field-help">${escapeHTML(x.name)} · 价格来源 ${escapeHTML(x.quote.price_source)}；日期 ${escapeHTML(x.quote.price_date)}；有效至 ${escapeHTML(x.quote.valid_until)}。${escapeHTML(x.quote.price_reason || '')}</p>`).join('')}</details>`;
+  html += section('4 附属内容',`<div class="report-appendix">${appendix}</div>`);
   $('report-body').innerHTML = html;
 }
+
 function closeReportEditor() {
   state.reportEdit = null; $('report-editor').hidden = true; $('report-edit-fields').disabled = false;
   $('save-report').disabled = false; $('save-report').textContent = '保存并复核'; $('cancel-report-edit').disabled = false;
@@ -432,7 +450,12 @@ function download(name, data, type) { const url = URL.createObjectURL(new Blob([
 const reportFilename = extension => `健康产品组合报告-${state.result.report.profile.id.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')}.${extension}`;
 $('download-md').onclick = () => { if (reportAvailable(state.result)) download(reportFilename('md'), state.result.markdown, 'text/markdown;charset=utf-8'); };
 $('download-json').onclick = () => { if (reportAvailable(state.result)) download(reportFilename('json'), JSON.stringify(state.result.report, null, 2), 'application/json'); };
-$('print').onclick = () => { if (reportAvailable(state.result)) window.print(); };
+$('print').onclick = () => {
+  if (!reportAvailable(state.result)) return;
+  const closed = [...$('report-body').querySelectorAll('details:not([open])')];
+  closed.forEach(el=>el.open=true);
+  try { window.print(); } finally { closed.forEach(el=>el.open=false); }
+};
 function renderCatalog() {
   const key = $('catalog-view-select').value, q = $('product-search').value.toLowerCase();
   const products = state.catalogs[key].filter(p => `${p.name} ${p.id} ${p.goals.join(' ')}`.toLowerCase().includes(q));

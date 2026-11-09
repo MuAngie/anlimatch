@@ -5,6 +5,28 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
+test('report has four chapters, preserves source text and expands appendix for print', async () => {
+  const a = await app();
+  const task=a.submit(); await new Promise(resolve=>setImmediate(resolve)); a.requests[0].resolve(); await task;
+  a.run(`state.result.report.input_text='输入原文<script>\\r\\n\\r\\n\\r\\n保留信息';
+    state.result.report.analysis.summary='本次主要问题摘要';
+    state.result.report.product_sources=[{id:'A',name:'来源产品',raw:{'标签原文':'原始资料<b>文本'}}];
+    renderReport();`);
+  const html=a.elements['report-body'].innerHTML;
+  const headings=['1 本次有什么主要问题','2 选取了什么产品，为什么选取这些产品','3 产品的剂量、使用方式及价格总和','4 附属内容'];
+  assert.deepEqual([...html.matchAll(/<section class="report-section"><h3>(.*?)<\/h3>/g)].map(m=>m[1]),headings);
+  assert.ok(html.indexOf('本次主要问题摘要')<html.indexOf(headings[1]));
+  assert.ok(html.indexOf('输入原文&lt;script&gt;')>html.indexOf(headings[3]));
+  assert.match(html,/原始资料&lt;b&gt;文本/);
+  assert.equal(a.run("cleanReportText(state.result.report.input_text)"),'输入原文<script>\n\n保留信息');
+  a.run(`globalThis.testDetails=[{open:false},{open:false}];
+    document.getElementById('report-body').querySelectorAll=()=>testDetails;
+    globalThis.printExpanded=false; globalThis.window={print(){printExpanded=testDetails.every(d=>d.open)}};`);
+  a.elements['print'].onclick();
+  assert.equal(a.run('printExpanded'),true);
+  assert.equal(a.run('testDetails.some(d=>d.open)'),false);
+});
+
 async function app() {
   const elements = {};
   const html = fs.readFileSync(`${__dirname}/web/index.html`, 'utf8');
@@ -35,7 +57,7 @@ async function app() {
         evaluation:{verdict:'pass',summary:'测试复核通过',source:'测试',model:'测试模型',evaluated_at:'',checks:[]},
         history_id:'history-'+payload.case.profile.id, markdown:payload.case.profile.id, report:{profile:payload.case.profile, status:'needs_review',demo:true,days:30,
           selected_products:[],analysis:{summary:payload.case.text, goals:[],lifestyle:[],follow_up:[]},
-          pricing:{},candidates:[],excluded_products:[],blocked:[],missing:[]}
+          pricing:{},nutrients:[],candidates:[],excluded_products:[],blocked:[],missing:[]}
       })))}));
     }});
   const run = code => vm.runInContext(code, context);

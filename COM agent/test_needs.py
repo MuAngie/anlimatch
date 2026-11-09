@@ -43,7 +43,8 @@ class NeedsTests(unittest.TestCase):
         result = generate_output(c,demo_catalog(),FakeClient())
         self.assertEqual(result["evaluation"]["verdict"],"pass")
         self.assertEqual(result["report"]["pricing"]["total"],217)
-        self.assertEqual(result["report"]["analysis"]["summary"],TEXT)
+        self.assertEqual(result["report"]["input_text"],TEXT)
+        self.assertIn('补充需求',result['report']['analysis']['summary'])
         self.assertIn("需求提取与确认依据",result["markdown"])
         self.assertIn("建议补充蛋白质及维生素B6",result["markdown"])
 

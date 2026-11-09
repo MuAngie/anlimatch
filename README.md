@@ -73,6 +73,8 @@ python server.py --port 8765
 4. 勾选本次使用的商品，确认后生成完整报告。程序计算标签日量、成分与整包装报价，模型说明组合关系并执行最终复核。
 5. 查看报告中的提醒，按需修改分析摘要、搭配依据和建议文字；修改后重新复核。支持 Markdown、JSON 及浏览器打印 PDF。
 
+报告分为四章：本次主要问题；选取的产品及理由；剂量、使用方式和价格总和；附属内容。附录保留整理多余空行后的输入原文、推荐产品原始资料及核验记录，网页默认折叠，打印时展开。摘要与选品理由由模型生成，日量及报价由程序计算；未提供的使用方式标为待确认。组合说明和独立复核提示词使用相同的章节要求。
+
 预算可留空。必填项以星号标识；明确冲突会阻止输出，资料不足形成的提醒会保留在可输出的待复核草案中。按标签计算日量不代表已证明适用于某个真实用户。
 
 ## 主要功能
@@ -118,11 +120,11 @@ anlimatch/
 从 `COM agent/` 目录运行不连接真实模型的单元测试：
 
 ```powershell
-python -m unittest test_engine test_needs test_matching test_generator test_selection test_evaluator test_report_editor test_learning test_model_optimization test_reliability test_archive_demo
+python -m unittest test_engine test_needs test_matching test_generator test_selection test_evaluator test_report_editor test_report_layout test_learning test_model_optimization test_reliability test_archive_demo
 node --test test_users.cjs
 ```
 
-`test_admin` 使用隔离数据库及临时本机服务；`test_http` 会向 `HEALTH_TEST_URL` 指定的服务写入虚构测试资料，勿指向日常使用的数据库。最近一次完整回归为 105 项 Python 测试及 18 项前端测试通过；未据此声称真实模型的准确率或临床效果。
+`test_admin` 使用隔离数据库及临时本机服务；`test_http` 会向 `HEALTH_TEST_URL` 指定的服务写入虚构测试资料，勿指向日常使用的数据库。最近一次完整回归为 109 项 Python 测试及 19 项前端测试通过；未据此声称真实模型的准确率或临床效果。
 
 ## 常见问题
 

@@ -12,7 +12,7 @@ from test_evaluator import response
 
 
 def proposal():
-    return {"status":"proposed", "summary":"虚构组合测试", "products":[
+    return {"status":"proposed", "summary":"虚构组合测试", "analysis_summary":"专业分析已明确蛋白质及维生素B6补充需求。", "products":[
         {"catalog_id":"DEMO-A", "rationale":"虚拟蛋白质补充依据"},
         {"catalog_id":"DEMO-C", "rationale":"虚拟B6补充依据"}]}
 
@@ -121,9 +121,9 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(result["evaluation"]["verdict"], "needs_review")
 
     def test_generation_refusal_or_malformed_output_does_not_trigger_eval(self):
-        for generated in ({"status":"needs_review", "summary":"需补充用药资料", "products":[]},
-                          {"status":"proposed", "summary":"错误格式", "products":[]},
-                          {"status":"proposed", "summary":"产品重复", "products":proposal()["products"] * 2}):
+        for generated in ({"status":"needs_review", "summary":"需补充用药资料", "analysis_summary":"需核对背景", "products":[]},
+                          {"status":"proposed", "summary":"错误格式", "analysis_summary":"测试", "products":[]},
+                          {"status":"proposed", "summary":"产品重复", "analysis_summary":"测试", "products":proposal()["products"] * 2}):
             client = FakeClient(generated)
             result = generate_output(case(), demo_catalog(), client)
             self.assertIsNone(result["report"])

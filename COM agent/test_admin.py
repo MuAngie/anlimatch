@@ -329,7 +329,7 @@ class AdminTests(unittest.TestCase):
         changed_user = dict(user,expected_version=self.call(client,'/api/users')[1]['users'][0]['save_version'],fields=dict(user['fields'],**{'selection-choice-id':confirmed['selection_id'],'selection-choices':'["DEMO-C"]'}))
         self.call(client,'/api/users/save',changed_user)
         self.assertIsNone(self.call(client,'/api/users')[1]['users'][0]['result'])
-        partial = FakeClient(generated={"status":"proposed","summary":"仅组合本次已勾选的蛋白质目标",
+        partial = FakeClient(generated={"status":"proposed","summary":"仅组合本次已勾选的蛋白质目标","analysis_summary":"本次确认蛋白质补充需求。",
             "products":[{"catalog_id":"DEMO-A","rationale":"已选蛋白质目标"}]})
         only_protein = self.select_confirmed(client,dict(confirmed,confirmed_goals=[0]))
         self.assertIsNone(self.call(client,'/api/users')[1]['users'][0]['result'])

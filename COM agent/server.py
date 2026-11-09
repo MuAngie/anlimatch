@@ -36,8 +36,8 @@ def prompts():
             for key, name, description, text, schema in (
                 ("needs", "需求提取", "从专业分析整理有原文依据的需求，使用者确认后进入选品", NEEDS_PROMPT, "needs_schema.json"),
                 ("matching", "产品关联判断", "结合成分、功能描述和依据比较所有允许评估的商品，保留原文引用及待核验原因", MATCHING_PROMPT, "matching_schema.json"),
-                ("compose", "组合说明", "解释已确认商品的搭配依据、重复与局限；日量及报价由本地程序确定", COMPOSE_PROMPT, "compose_schema.json"),
-                ("eval", "独立复核", "检查选品、用量、禁用商品、重复成分与禁忌；提醒随报告保留，明确冲突拦截", EVAL_PROMPT, "eval_schema.json"),
+                ("compose", "组合说明", "按四章报告整理主要问题及选品理由；用量、使用方式、报价和原始资料由程序呈现", COMPOSE_PROMPT, "compose_schema.json"),
+                ("eval", "独立复核", "核对四章报告与原始依据，检查选品、用量、禁用商品、重复成分与禁忌；提醒保留，明确冲突拦截", EVAL_PROMPT, "eval_schema.json"),
                 ("learning", "人工案例规则提炼", "管理员手动提炼单份案例，草案审核后启用；生成时不读取完整案例", LEARNING_PROMPT, "learning_schema.json"))]
 
 

@@ -43,8 +43,11 @@ PROMPT = """你是健康产品组合说明员，负责解释本次搭配为什�
 - 其余能够形成待专业复核草案时 status=proposed，products 非空。
 
 ## 输出约束
+- 最终报告按四章呈现：1 本次有什么主要问题；2 选取了什么产品，为什么选取这些产品；3 产品的剂量、使用方式及价格总和；4 附属内容（输入原文、推荐产品原始资料及核验记录）。这里只返回 Schema 字段，不输出完整 Markdown 报告。
+- analysis_summary 用于第1章：用简短中文概括本次原专业分析已明确的主要问题、已确认需求及重要限制，建议不超过180字。保留否定和不确定性，不新增诊断，不把分析全文复制进摘要。
+- 每款 rationale 用于第2章，说明选取该商品的依据及与本次需求的关系。第3章由程序引用标签日量、已提供的使用方式并计算报价，第4章由程序附上原文与原始资料；不得编造服用时间、随餐/空腹要求或冲泡方法。
 - products 的 catalog_id 不重复，且必须来自 catalog（或等于 confirmed_catalog_ids）。
-- rationale 只写程序写不出的部分：成分互补或重复关系、需专业确认的合用依据、本组合的局限。目标对应关系、标签来源、日量与金额由程序写在同一段落前后，不要重复，也不要写成 Markdown。
+- rationale 说明选品依据（成分、标签描述和证据与本次需求的联系）、成分互补或重复关系、需专业确认的合用依据及局限。程序已列出目标名称、标签来源、日量与金额，不要重复这些列表，也不要写成 Markdown。
 - 同一提醒不要在多个商品的 rationale 里重复；明确冲突不得为缩短篇幅而省略。不声称协同疗效已证实。
 - rationale 不超过 180 字，summary 不超过 300 字。
 - summary 会展示在组合结果中，needs_review 时还进入报告提醒。已确认商品通过本地检查但返回空 products 的 needs_review 时，程序可能按标签生成计算草案并引用 summary，再进入最终复核。summary 必须说明限制，不能把自动计算草案描述成已确认适用或合用安全。block 始终阻止报告输出。
@@ -225,6 +228,7 @@ def generate_output(case, catalog, client=None, selection=None, confirmed_produc
         calculation_case = dict(case, adjustments=[a for a in (case.get("adjustments") or []) if a.get("catalog_id") in choices])
         report = compose(calculation_case, [p for p in catalog if p["id"] in choices],goal_matches=goal_matches)
         report["matching"] = matching
+        report['analysis']['summary'] = proposal['analysis_summary']
         if learned: report['learning'] = learned
         if report["blocked"]:
             return stop("block", "；".join(report["blocked"]), model, "本地规则", generation)
@@ -323,9 +327,10 @@ def retry_review(case, catalog, saved, client=None, reprice=False, checkpoint=No
 
 
 def validate_proposal(value):
-    if (not isinstance(value, dict) or set(value) != {"status", "summary", "products"}
+    if (not isinstance(value, dict) or set(value) != {"status", "summary", "analysis_summary", "products"}
             or value["status"] not in ("proposed", "needs_review", "block")
             or not isinstance(value["summary"], str) or not value["summary"].strip()
+            or not isinstance(value['analysis_summary'],str) or not value['analysis_summary'].strip()
             or not isinstance(value["products"], list)):
         raise ValueError("配比结果格式不正确")
     if (value["status"] == "proposed" and not value["products"]) or (value["status"] == "block" and value["products"]):

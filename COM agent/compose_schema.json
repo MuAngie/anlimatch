@@ -1,9 +1,10 @@
 {
   "type": "object", "additionalProperties": false,
-  "required": ["status", "summary", "products"],
+  "required": ["status", "summary", "analysis_summary", "products"],
   "properties": {
     "status": {"type": "string", "enum": ["proposed", "needs_review", "block"]},
     "summary": {"type": "string"},
+    "analysis_summary": {"type": "string"},
     "products": {
       "type": "array",
       "items": {

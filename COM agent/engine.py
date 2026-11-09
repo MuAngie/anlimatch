@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import warnings
+from copy import deepcopy
 
 TODAY = lambda: date.today().isoformat()
 GOALS = {
@@ -482,6 +483,7 @@ def compose(payload, catalog, goal_matches=None):
         selected, nutrients = [], []
         total_price, known, unpriced = None, Decimal(0), []
     report = {"id": "REPORT-" + as_of.isoformat(), "as_of": as_of.isoformat(), "days": int(days),
+              "input_text":text, "product_sources":[deepcopy(p) for p in catalog if p['id'] in {s['id'] for s in selected}],
               "status": "blocked" if blocked else "needs_review", "demo": demo, "analysis": analysis,
               "review": {"reviewer": payload.get("reviewer"), "reviewed_at": payload.get("reviewed_at"), "declared_approved": payload.get("analysis_approved", False)},
               "profile": profile, "selected_products": selected, "candidates": candidates, "excluded_products": excluded,
@@ -493,64 +495,104 @@ def compose(payload, catalog, goal_matches=None):
     return report
 
 
+def clean_report_text(value):
+    text = str(value or '').replace('\r\n', '\n').replace('\r', '\n')
+    return re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', text).strip('\n')
+
+
+def product_usage(product):
+    for fields in (product, product.get('raw') or {}):
+        for key in ('usage_method', '使用方式', '使用方法', '食用方法', '建议食用方法'):
+            value = fields.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return '未提供，请核对现售标签后确认'
+
+
+def report_main_problems(report):
+    analysis = report['analysis']
+    summary = analysis.get('summary') or ''
+    if analysis.get('original_summary') or ('input_text' in report and summary != report['input_text']):
+        return summary
+    context = analysis.get('goal_context') or {}
+    return context.get('summary') or ('本次已确认的需求：' + '、'.join(analysis.get('goals') or []) if analysis.get('goals') else '未识别明确需求，请核对原专业分析。')
+
+
 def markdown(r):
     def cell(value):
-        return "待确认" if value is None else str(value).replace("|", "\\|").replace("\n", " ")
-    lines = ["# 用户健康分析与产品组合报告", "", f"报告日期：{r['as_of']} · 周期：{r['days']}天",
-             "", "用户：" + cell(r["profile"].get("name") or r["profile"].get("id")) + "；用户编号：" + cell(r["profile"].get("id")),
-             "", "状态：" + ("暂停产品搭配" if r["status"] == "blocked" else "待专业复核的草案"),
-             "", "虚拟产品、用量和报价仅用于演示。" if r["demo"] else "由本地规则生成，专业分析审核状态由使用者声明。",
-             *(["", "## 组合提醒（待确认）", ""] + ["- " + s for s in r["warnings"]] if r.get("warnings") else []),
-             "", "## 报告分析摘要（人工修改）" if r["analysis"].get("original_summary") else "## 健康分析（保留专业分析原文）", "", r["analysis"]["summary"],
-             "", "明确目标：" + ("、".join(r["analysis"]["goals"]) or "尚未识别"),
-             "", "审核人：" + cell(r["review"]["reviewer"]) + "；审核日期：" + cell(r["review"]["reviewed_at"]),
-             "", "## 产品组合与每日用量", "", "| 产品/SKU | 目标 | 每日量 | 周期包装数 | 余量 | 购买金额（元） | 消耗成本（元） |", "|---|---|---|---|---|---|---|"]
-    for p in r["selected_products"]:
-        q = p["quote"]
-        lines.append("| " + " | ".join(map(cell, [p["name"] + "/" + p["sku"], "、".join(p["matched_goals"]),
-                     f"{p['daily_units']:g}{p['unit']}", q["packs"], q["remaining_units"], q["purchase_cost"], q["consumption_cost"]])) + " |")
-    if not r["selected_products"]:
-        lines.append("\n没有可执行组合。请根据下面的筛选记录补齐资料。")
-    lines += ["", "## 组合与用量依据", ""]
-    for p in r["selected_products"]:
-        lines += [f"### {p['name']}", "", p["rationale"], "", "标签来源：" + cell(p["label_source"]),
-                  "", "依据：" + "；".join(map(cell, p["evidence"])),
-                  "", "局限：成分的一般营养作用不等于该品牌临床疗效；没有直接组合研究时，不声称协同获益已证实。"]
-    lines += ["", "## 每日成分合计", "", "| 成分 | 本组合 | 饮食 | 其他补充剂 | 合计 | 提供的上限 | 单位 | 核验 |", "|---|---|---|---|---|---|---|---|"]
-    for n in r["nutrients"]:
-        lines.append("| " + " | ".join(cell(n[k]) for k in ("name", "product_amount", "diet_amount", "supplement_amount", "total", "upper_limit", "unit", "result")) + " |")
-    pr = r["pricing"]
-    lines += ["", "## 组合报价", "", f"已知商品小计：{pr['known_subtotal']:.2f}元；运费：{pr['shipping']:.2f}元；优惠：{pr['discount']:.2f}元。",
-              "", "总购买金额：" + (f"{pr['total']:.2f}元" if pr["total"] is not None else "待报价或已暂停，未把未知价格当0元。"),
-              "", "按整包装购买：包装数 = 向上取整（每日量 × 天数 ÷ 每包装含量）。消耗成本与实际购买费用分别计算。"]
-    for p in r["selected_products"]:
-        q = p["quote"]
-        lines += ["", f"{p['name']}：价格来源 {cell(q['price_source'])}；日期 {cell(q['price_date'])}；有效至 {cell(q['valid_until'])}。" + (q["price_reason"] or "")]
-    lines += ["", "## 筛选记录", ""] + [f"- {cell(p['name'])}：{cell(p['reason'])}" for p in r["excluded_products"]]
-    if r["analysis"].get("goal_context"):
-        lines += ["", "## 需求提取与确认依据", ""]
-        lines += [f"- {cell(g['name'])}：{cell(g['evidence'])}" for g in r["analysis"]["goal_context"]["goals"]]
-        lines += ["- 注意：" + cell(s) for s in r["analysis"]["goal_context"]["cautions"]]
-    if r.get("matching"):
-        lines += ["", "## 产品关联依据", "", cell(r["matching"]["summary"])]
-        for item in r["matching"]["products"]:
-            if item["status"] == "related":
-                lines += ["", "- " + cell(item["name"]) + "：" + cell(item["reason"])]
-                lines += ["  - 原文依据（" + cell(e["field"]) + "）：" + cell(e["quote"]) for e in item["evidence"]]
-    if r.get('learning',{}).get('rules'):
-        lines += ['', '## 命中的人工审核规则', '', '规则作为参考，不覆盖禁用商品、标签用量和安全校验。']
+        return '待确认' if value is None else str(value).replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
+    def literal(value, language='text'):
+        fence = '`' * max(3, max((len(s) for s in re.findall(r'`+', value)), default=0) + 1)
+        return [fence + language, value, fence]
+    lines = ['# 用户健康分析与产品组合报告', '', f"报告日期：{r['as_of']} · 周期：{r['days']}天", '',
+             '用户：' + cell(r['profile'].get('name') or r['profile'].get('id')) + '；用户编号：' + cell(r['profile'].get('id')), '',
+             '状态：' + ('暂停产品搭配' if r['status'] == 'blocked' else '待专业复核的草案'), '',
+             '虚拟产品、用量和报价仅用于演示。' if r['demo'] else '方案需由专业人员结合个体资料审核。', '',
+             '## 1 本次有什么主要问题', '', clean_report_text(report_main_problems(r)), '',
+             '本次确认的需求：' + ('、'.join(r['analysis']['goals']) or '尚未识别')]
+    if r.get('edited_at'):
+        lines += ['', '报告文字已人工修改并重新复核：' + cell(r['edited_at'])]
+    if r.get('warnings'):
+        lines += ['', '### 组合提醒（待确认）', ''] + ['- ' + s for s in r['warnings']]
+    advice = r['analysis']['lifestyle'] + r['analysis']['follow_up']
+    if advice:
+        lines += ['', '### 建议与复查', ''] + ['- ' + s for s in advice]
+    lines += ['', '## 2 选取了什么产品，为什么选取这些产品', '']
+    for p in r['selected_products']:
+        lines += ['### ' + cell(p['name']), '', '对应需求：' + '、'.join(p['matched_goals']), '', p['rationale'], '']
+    if not r['selected_products']:
+        lines += ['没有可执行组合，请核对附录中的资料缺项和筛选记录。']
+    lines += ['', '## 3 产品的剂量、使用方式及价格总和', '',
+              '| 产品 / SKU | 每日用量 | 使用方式 | 周期包装数 | 购买金额（元） | 消耗成本（元） |',
+              '|---|---|---|---|---|---|']
+    for p in r['selected_products']:
+        q = p['quote']
+        lines += ['| ' + ' | '.join(cell(v) for v in (p['name'] + ' / ' + p['sku'],
+                  f"{p['daily_units']:g}{p['unit']}", product_usage(p), q['packs'], q['purchase_cost'], q['consumption_cost'])) + ' |']
+    pr = r['pricing']
+    lines += ['', '总购买金额：' + (f"{pr['total']:.2f}元" if pr['total'] is not None else '待报价或已暂停，未把未知价格当0元。'), '',
+              f"已知商品小计：{pr['known_subtotal']:.2f}元；运费：{pr['shipping']:.2f}元；优惠：{pr['discount']:.2f}元。", '',
+              '包装数 = 向上取整（每日量 × 周期天数 ÷ 每包装含量）；消耗成本与实际购买费用分别计算。使用方式缺失时不自行补充服用时间或方法。']
+    if pr['budget_remaining'] is not None:
+        lines += ['', ('预算余量：' if pr['budget_remaining'] >= 0 else '超出预算：') + f"{abs(pr['budget_remaining']):.2f}元"]
+    for p in r['selected_products']:
+        q = p['quote']
+        lines += ['', cell(p['name']) + '：价格来源 ' + cell(q['price_source']) + '；日期 ' + cell(q['price_date']) + '；有效至 ' + cell(q['valid_until']) + '。' + (q['price_reason'] or '')]
+    lines += ['', '## 4 附属内容', '', '### 4.1 输入信息原文', '',
+              '仅整理多余空行，保留输入内容；原始数据仍保存在报告中。', '']
+    original = r.get('input_text', r['analysis'].get('original_summary', r['analysis']['summary']))
+    lines += literal(clean_report_text(original))
+    lines += ['', '### 4.2 推荐产品的原始信息', '']
+    if 'product_sources' not in r:
+        lines += ['历史报告未保存独立原始快照，以下为报告内保留的产品资料。', '']
+    for p in r.get('product_sources', r['selected_products']):
+        lines += ['#### ' + cell(p['name']), ''] + literal(json.dumps(p, ensure_ascii=False, indent=2, default=str), 'json') + ['']
+    lines += ['', '### 每日成分合计', '', '| 成分 | 本组合 | 饮食 | 其他补充剂 | 合计 | 提供的上限 | 单位 | 核验 |', '|---|---|---|---|---|---|---|---|']
+    for n in r['nutrients']:
+        lines += ['| ' + ' | '.join(cell(n[k]) for k in ('name','product_amount','diet_amount','supplement_amount','total','upper_limit','unit','result')) + ' |']
+    context = r['analysis'].get('goal_context')
+    if context:
+        lines += ['', '### 需求提取与确认依据', '']
+        lines += ['- ' + cell(g['name']) + '：' + cell(g['evidence']) for g in context['goals']]
+        lines += ['- 注意：' + cell(s) for s in context['cautions']]
+    if r.get('matching'):
+        lines += ['', '### 产品关联依据', '', cell(r['matching']['summary'])]
+        for item in r['matching']['products']:
+            if item['status'] == 'related':
+                lines += ['', '- ' + cell(item['name']) + '：' + cell(item['reason'])]
+                lines += ['  - 原文依据（' + cell(e['field']) + '）：' + cell(e['quote']) for e in item['evidence']]
+    lines += ['', '### 筛选记录', ''] + ['- ' + cell(p['name']) + '：' + cell(p['reason']) for p in r['excluded_products']]
+    lines += ['', '### 阻断与待确认', ''] + ['- ' + s for s in r['blocked'] + r['missing']]
+    if r.get('learning', {}).get('rules'):
+        lines += ['', '### 命中的人工审核规则', '', '规则不覆盖用户禁用、标签用量及安全校验。']
         for rule in r['learning']['rules']:
-            lines += ['', f"- {cell(rule['title'])} · 规则 {rule['id']} · 版本 {rule['revision']} · 来源案例 {rule['case_id']}（{cell(rule['case_title'])}）",
-                      '  - 依据：'+cell(rule['reason']), '  - 局限：'+cell(rule['limitations'])]
-    lines += ["", "## 阻断与待确认", ""] + ["- " + s for s in r["blocked"] + r["missing"]]
-    lines += ["", "## 生活方式与跟踪", ""] + ["- " + s for s in r["analysis"]["lifestyle"] + r["analysis"]["follow_up"]]
-    if r["analysis"].get("original_summary"):
-        lines += ["", "## 原专业分析（修改前原文）", "", r["analysis"]["original_summary"]]
-    lines += ["", r["method"], ""]
-    if r.get("evaluation"):
-        ev = r["evaluation"]
-        verdict = "有提醒，待确认" if ev["verdict"] == "needs_review" else "通过（仍需专业复核）"
-        lines += ["## 大模型复核", "", f"模型：{ev['model']}；结果：{verdict}；复核时间：{ev['evaluated_at']}。", "", ev["summary"]]
-        lines += [f"- {item['name']}（{'待确认' if item['status'] == 'unknown' else '通过'}）：{item['reason']}" for item in ev["checks"]]
-        lines += ["", "复核仅依据所提供资料检查一致性，不代表临床审核或保证发现所有风险。", ""]
-    return "\n".join(lines)
+            lines += ['', '- ' + cell(rule['title']) + ' · 规则 ' + rule['id'] + ' · 版本 ' + str(rule['revision']) + ' · 来源案例 ' + rule['case_id'],
+                      '  - 依据：' + cell(rule['reason']), '  - 局限：' + cell(rule['limitations'])]
+    lines += ['', '审核人：' + cell(r['review']['reviewer']) + '；审核日期：' + cell(r['review']['reviewed_at']), '', r['method'], '']
+    if r.get('evaluation'):
+        ev = r['evaluation']
+        verdict = '有提醒，待确认' if ev['verdict'] == 'needs_review' else '通过（仍需专业复核）'
+        lines += ['### 大模型复核', '', f"模型：{ev['model']}；结果：{verdict}；复核时间：{ev['evaluated_at']}。", '', ev['summary']]
+        lines += ['- ' + item['name'] + '（' + ('待确认' if item['status'] == 'unknown' else '通过') + '）：' + item['reason'] for item in ev['checks']]
+        lines += ['', '复核仅依据所提供资料检查一致性，不代表临床审核或保证发现所有风险。', '']
+    return '\n'.join(lines)

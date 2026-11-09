@@ -49,7 +49,7 @@ class ArchiveDemoTests(unittest.TestCase):
         matched = {'summary':'虚构目标关联','products':[
             {'catalog_id':p['id'],'status':'related','goal_indices':[i],'reason':'演示成分支持对应需求',
              'evidence':[{'field':'ingredients','quote':source_fields(p)['ingredients']}]} for i,p in enumerate(chosen)]}
-        proposed = {'status':'proposed','summary':'Demo组合','products':[
+        proposed = {'status':'proposed','summary':'Demo组合','analysis_summary':'虚构蛋白质及B6补充需求。','products':[
             {'catalog_id':p['id'],'rationale':'仅按Demo演示参数计算'} for p in chosen]}
         client = FakeClient(matched=matched,generated=proposed)
         c = case(); c['budget'] = None
